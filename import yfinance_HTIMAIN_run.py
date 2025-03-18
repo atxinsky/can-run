@@ -245,6 +245,13 @@ def upload_to_notion(df, notion_api_key, database_id):
         else:
             NUMBERED_COLUMNS[column] = f"{i:02d}. {column}"
     
+    # 定义百分比列，这些列应该保持为文本类型以保留百分号
+    PERCENT_COLUMNS = [
+        "Price Change %", "Gap to High %", "Profit Margin", 
+        "Return on Assets (ttm)", "Return on Equity (ttm)",
+        "Quarterly Revenue Growth (yoy)", "Quarterly Earnings Growth (yoy)"
+    ]
+    
     # 获取CSV文件的列顺序
     csv_columns = list(df.columns)
     print(f"CSV文件的列顺序: {csv_columns}")
@@ -305,18 +312,27 @@ def upload_to_notion(df, notion_api_key, database_id):
             
             # 如果不是标题属性，则创建
             if column != "Company" or title_property is None:
-                if any(keyword in column for keyword in ["Price", "P/E", "P/B", "EPS", "RSI", "Gap", "%", "Market Cap", "Enterprise Value", "Revenue", "EBITDA", "Margin", "Return", "Growth", "Debt", "Dividend", "Cash"]):
+                # 修改这里：将百分比列设置为rich_text类型
+                if column in PERCENT_COLUMNS:
+                    # 百分比属性使用文本类型
+                    properties[numbered_column] = {"rich_text": {}}
+                    print(f"创建文本属性(百分比): {numbered_column}")
+                elif any(keyword in column for keyword in ["Price", "P/E", "P/B", "EPS", "RSI", "Gap", "Market Cap", "Enterprise Value", "Revenue", "EBITDA", "Margin", "Return", "Growth", "Debt", "Dividend", "Cash"]) and column not in PERCENT_COLUMNS:
                     # 数字属性
                     properties[numbered_column] = {"number": {}}
+                    print(f"创建数字属性: {numbered_column}")
                 elif "Date" in column:
                     # 日期属性
                     properties[numbered_column] = {"date": {}}
-                elif column == "Status" or column == "Ticker" or "English Name" in column:
+                    print(f"创建日期属性: {numbered_column}")
+                elif column == "Status" or column == "Ticker":  # 移除了"English Name"
                     # 选择属性
                     properties[numbered_column] = {"select": {}}
+                    print(f"创建选择属性: {numbered_column}")
                 else:
                     # 默认为富文本
                     properties[numbered_column] = {"rich_text": {}}
+                    print(f"创建文本属性: {numbered_column}")
         
         # 更新数据库结构
         notion.databases.update(
@@ -340,9 +356,8 @@ def upload_to_notion(df, notion_api_key, database_id):
             # 准备属性数据
             properties = {}
             
-            # 设置标题属性 - 修复这里的问题
+            # 设置标题属性
             company_value = str(row.get("Company", "未知公司"))
-            # 正确设置标题属性
             properties[title_property] = {
                 "title": [{"text": {"content": company_value}}]
             }
@@ -387,8 +402,19 @@ def upload_to_notion(df, notion_api_key, database_id):
                         print(f"警告: 无法将 '{column}' 的值 '{value}' 转换为数字: {e}")
                         properties[numbered_column] = {"rich_text": [{"text": {"content": str(value)}}]}
                 elif prop_type == "select":
-                    # 选择类型
-                    properties[numbered_column] = {"select": {"name": str(value)}}
+                    # 选择类型 - 修改这里：处理包含逗号的选择值
+                    try:
+                        # 如果值包含逗号，可能会导致错误
+                        if "," in str(value):
+                            # 替换逗号或使用其他分隔符
+                            clean_value = str(value).replace(",", ";")
+                            properties[numbered_column] = {"select": {"name": clean_value}}
+                        else:
+                            properties[numbered_column] = {"select": {"name": str(value)}}
+                    except Exception as e:
+                        print(f"警告: 无法设置选择属性 '{column}' 的值 '{value}': {e}")
+                        # 回退到文本类型
+                        properties[numbered_column] = {"rich_text": [{"text": {"content": str(value)}}]}
                 elif prop_type == "date":
                     # 日期类型
                     try:
