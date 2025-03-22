@@ -5,6 +5,7 @@ import random
 from notion_client import Client
 import json
 import numpy as np
+from datetime import datetime  # 添加datetime导入
 
 # 公司列表，格式：名称, ticker, 英文名称（可供参考）
 companies = [
@@ -39,6 +40,11 @@ companies = [
     ("众安在线", "6060.HK", "ZhongAn Online P&C Insurance Company Limited"),
     ("东方甄选", "1797.HK", "Eastern Select Group Company Limited")
 ]
+
+# 获取当前时间作为数据时间戳
+current_time = datetime.now()
+timestamp_str = current_time.strftime("%Y-%m-%d %H:%M:%S")
+print(f"开始获取数据，时间: {timestamp_str}")
 
 # 修改需要获取的指标及其对应 Yahoo Finance 的键
 metrics_keys = {
@@ -210,11 +216,15 @@ for name, ticker, eng_name in companies:
     # 随机延时2到5秒，防止请求频繁
     time.sleep(random.uniform(2, 5))
 
+# 添加时间戳信息到数据框
+timestamp_data = {"Company": "数据更新时间", "Ticker": timestamp_str}
+data.append(timestamp_data)
+
 # 转换为 DataFrame 并保存为 CSV 文件（UTF-8 带 BOM 编码便于 Excel 打开）
 df = pd.DataFrame(data)
 df.to_csv("htimain.csv", index=False, encoding="utf-8-sig")
 
-print("数据已更新并保存至 htimain.csv")
+print(f"数据已更新并保存至 htimain.csv (更新时间: {timestamp_str})")
 
 # 上传数据到Notion
 def upload_to_notion(df, notion_api_key, database_id):
@@ -469,8 +479,8 @@ try:
 
     # 上传数据到Notion
     upload_to_notion(df, NOTION_API_KEY, NOTION_DATABASE_ID)
-    print("数据已成功保存到本地CSV文件并上传到Notion数据库")
+    print(f"数据已成功保存到本地CSV文件并上传到Notion数据库 (更新时间: {timestamp_str})")
     
 except Exception as e:
     print(f"连接Notion API时出错: {e}")
-    print("数据已保存到本地CSV文件，但未能上传到Notion")
+    print(f"数据已保存到本地CSV文件，但未能上传到Notion (更新时间: {timestamp_str})")
